@@ -1,0 +1,124 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# -----------------------------
+# Supply Chain Environment
+# -----------------------------
+class SupplyChainEnv:
+    def __init__(self):
+        self.max_inventory = 500
+        self.holding_cost = 1
+        self.stockout_cost = 5
+        self.transport_cost = 2
+        self.reset()
+
+    def reset(self):
+        self.inventory = 200
+        self.day = 0
+        return self.inventory
+
+    def step(self, action, demand):
+        self.inventory += action
+        self.inventory = min(self.inventory, self.max_inventory)
+
+        shipped = min(self.inventory, demand)
+        self.inventory -= shipped
+
+        stockout = max(0, demand - shipped)
+
+        reward = (
+            -self.holding_cost * self.inventory
+            -self.stockout_cost * stockout
+            -self.transport_cost * action
+        )
+
+        self.day += 1
+        return self.inventory, reward
+
+
+# -----------------------------
+# Synthetic Demand Generator
+# -----------------------------
+def generate_demand(days=50, mean=80):
+    np.random.seed(42)
+    return np.random.poisson(mean, days)
+
+
+# -----------------------------
+# Policies
+# -----------------------------
+def aggressive_policy(inventory):
+    return 150 if inventory < 200 else 0
+
+def conservative_policy(inventory):
+    return 50 if inventory < 150 else 0
+
+def balanced_policy(inventory):
+    return 100 if inventory < 180 else 0
+
+
+# -----------------------------
+# Policy Evaluation
+# -----------------------------
+def run_policy(env, policy, demand_data):
+    inventory_levels = []
+    rewards = []
+
+    state = env.reset()
+    for demand in demand_data:
+        action = policy(state)
+        state, reward = env.step(action, demand)
+        inventory_levels.append(state)
+        rewards.append(reward)
+
+    return inventory_levels, rewards
+
+
+# -----------------------------
+# Simulation
+# -----------------------------
+days = 50
+demand_data = generate_demand(days)
+
+env = SupplyChainEnv()
+
+inv_aggr, rew_aggr = run_policy(env, aggressive_policy, demand_data)
+inv_cons, rew_cons = run_policy(env, conservative_policy, demand_data)
+inv_bal,  rew_bal  = run_policy(env, balanced_policy, demand_data)
+
+
+# -----------------------------
+# Results Table
+# -----------------------------
+results = pd.DataFrame({
+    "Policy": ["Aggressive", "Conservative", "Balanced"],
+    "Total Reward": [
+        sum(rew_aggr),
+        sum(rew_cons),
+        sum(rew_bal)
+    ],
+    "Average Inventory": [
+        np.mean(inv_aggr),
+        np.mean(inv_cons),
+        np.mean(inv_bal)
+    ]
+})
+
+print("\n--- Policy Performance Summary ---\n")
+print(results)
+
+
+# -----------------------------
+# Visualization
+# -----------------------------
+plt.figure(figsize=(10, 5))
+plt.plot(inv_aggr, label="Aggressive Policy")
+plt.plot(inv_cons, label="Conservative Policy")
+plt.plot(inv_bal, label="Balanced Policy")
+plt.xlabel("Days")
+plt.ylabel("Inventory Level")
+plt.title("Inventory Levels Under Different Policies")
+plt.legend()
+plt.grid()
+plt.show()
